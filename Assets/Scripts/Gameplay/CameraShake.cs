@@ -7,13 +7,11 @@ namespace PulseHighway.Gameplay
         public static CameraShake Instance { get; private set; }
 
         private float shakeIntensity;
+        private float zPush;
         private Vector3 basePosition;
         private bool basePositionSet;
 
-        private void Awake()
-        {
-            Instance = this;
-        }
+        private void Awake() { Instance = this; }
 
         private void LateUpdate()
         {
@@ -23,24 +21,44 @@ namespace PulseHighway.Gameplay
                 basePositionSet = true;
             }
 
-            if (shakeIntensity > 0.01f)
-            {
-                float offsetX = Random.Range(-1f, 1f) * shakeIntensity;
-                float offsetY = Random.Range(-1f, 1f) * shakeIntensity;
-                transform.localPosition = basePosition + new Vector3(offsetX, offsetY, 0f);
+            Vector3 offset = Vector3.zero;
 
-                shakeIntensity *= 0.9f; // Decay
+            // Perlin noise shake (smoother than random)
+            if (shakeIntensity > 0.005f)
+            {
+                float t = Time.time * 25f;
+                float x = (Mathf.PerlinNoise(t, 0f) - 0.5f) * 2f * shakeIntensity;
+                float y = (Mathf.PerlinNoise(0f, t) - 0.5f) * 2f * shakeIntensity;
+                offset = new Vector3(x, y, 0f);
+                shakeIntensity *= 0.94f; // Slower decay (was 0.9)
             }
             else
             {
-                transform.localPosition = basePosition;
                 shakeIntensity = 0f;
             }
+
+            // Z-push (camera zooms forward on hit, springs back)
+            if (Mathf.Abs(zPush) > 0.01f)
+            {
+                offset.z += zPush;
+                zPush *= 0.92f;
+            }
+            else
+            {
+                zPush = 0f;
+            }
+
+            transform.localPosition = basePosition + offset;
         }
 
         public void Shake(float intensity = 0.3f)
         {
             shakeIntensity = Mathf.Max(shakeIntensity, intensity);
+        }
+
+        public void PushForward(float amount = -0.5f)
+        {
+            zPush += amount;
         }
 
         public void UpdateBasePosition(Vector3 newBase)
@@ -49,9 +67,6 @@ namespace PulseHighway.Gameplay
             basePositionSet = true;
         }
 
-        private void OnDestroy()
-        {
-            if (Instance == this) Instance = null;
-        }
+        private void OnDestroy() { if (Instance == this) Instance = null; }
     }
 }

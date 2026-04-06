@@ -4,10 +4,12 @@ namespace PulseHighway.Game
 {
     public static class TimingWindows
     {
-        public const float Perfect = 0.025f;  // ±25ms
-        public const float Great = 0.050f;    // ±50ms
-        public const float Good = 0.100f;     // ±100ms
-        public const float Miss = 0.100f;     // >100ms
+        public const float Perfect = 0.045f;  // ±45ms (was ±25ms — much more forgiving)
+        public const float Great = 0.090f;    // ±90ms (was ±50ms)
+        public const float Good = 0.150f;     // ±150ms (was ±100ms)
+
+        // Configurable audio latency offset (ms). Positive = player hears audio late.
+        public static float LatencyOffset = 0f;
 
         public static Judgment GetJudgment(float timeDiff)
         {

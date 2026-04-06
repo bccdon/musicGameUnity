@@ -72,8 +72,8 @@ namespace PulseHighway.Tests.EditMode.Audio
             var chart = generator.Generate(basicAnalysis, easyConfig);
             foreach (var note in chart.notes)
             {
-                Assert.GreaterOrEqual(note.time, 2f, "Note should be at least 2s into song");
-                Assert.LessOrEqual(note.time, easyConfig.duration - 2f, "Note should be before last 2s");
+                Assert.GreaterOrEqual(note.time, 1.5f, "Note should be at least 1.5s into song");
+                Assert.LessOrEqual(note.time, easyConfig.duration - 1.5f, "Note should be before last 1.5s");
             }
         }
 
@@ -146,8 +146,8 @@ namespace PulseHighway.Tests.EditMode.Audio
         public void Generate_MeetsMinimumNoteCount()
         {
             var chart = generator.Generate(basicAnalysis, easyConfig);
-            // Easy difficulty minNoteCount is 50
-            Assert.GreaterOrEqual(chart.notes.Length, 50);
+            // Easy difficulty minNoteCount is 40
+            Assert.GreaterOrEqual(chart.notes.Length, 40);
         }
     }
 }

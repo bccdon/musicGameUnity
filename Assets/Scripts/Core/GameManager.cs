@@ -262,9 +262,30 @@ namespace PulseHighway.Core
                 hud.ShowJudgment(judgment, lane);
                 hud.UpdateScore(State.score, State.combo);
 
+                // Flying score text
+                if (points > 0)
+                    hud.SpawnFlyingScore(points, judgment, lane);
+
+                // Particle burst
                 Color laneColor = Visual.MaterialFactory.GetLaneColor(lane);
                 hitEffectPool.TriggerBurst(lane, laneColor);
-                CameraShake.Instance?.Shake(judgment == Judgment.Perfect ? 0.3f : 0.15f);
+
+                // Camera effects based on judgment
+                if (judgment == Judgment.Perfect)
+                {
+                    CameraShake.Instance?.Shake(0.25f);
+                    CameraShake.Instance?.PushForward(-0.4f);
+                    hud.FlashScreen(laneColor, 0.12f);
+                }
+                else if (judgment == Judgment.Great)
+                {
+                    CameraShake.Instance?.Shake(0.12f);
+                    hud.FlashScreen(laneColor, 0.06f);
+                }
+                else if (judgment == Judgment.Good)
+                {
+                    CameraShake.Instance?.Shake(0.06f);
+                }
 
                 // Start hold tracking
                 if (note.type == NoteType.Hold)

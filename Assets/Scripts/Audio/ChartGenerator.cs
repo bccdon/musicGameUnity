@@ -7,88 +7,83 @@ namespace PulseHighway.Audio
 {
     public class ChartGenerator
     {
-        // Difficulty settings matching original
-        private static readonly Dictionary<string, DifficultySettings> DIFFICULTY_SETTINGS =
+        private const float MIN_NOTE_SPACING = 0.15f;
+
+        private static readonly Dictionary<string, DifficultySettings> SETTINGS =
             new Dictionary<string, DifficultySettings>
         {
-            { "easy", new DifficultySettings(0.25f, true, 1, 0.5f, 50, 150) },
-            { "medium", new DifficultySettings(0.5f, true, 2, 1.0f, 150, 300) },
-            { "hard", new DifficultySettings(0.75f, false, 4, 2.0f, 300, 500) },
-            { "expert", new DifficultySettings(0.95f, false, 0, 3.0f, 500, 10000) }
+            { "easy",   new DifficultySettings(0.3f,  true,  1, 0.5f, 40, 120) },
+            { "medium", new DifficultySettings(0.55f, true,  2, 1.0f, 100, 250) },
+            { "hard",   new DifficultySettings(0.75f, false, 4, 2.0f, 200, 450) },
+            { "expert", new DifficultySettings(0.90f, false, 0, 3.0f, 350, 8000) }
         };
 
-        private const float MIN_NOTE_SPACING = 0.2f;
+        private System.Random rng;
 
         public ChartData Generate(AnalysisResult analysis, LevelConfig config)
         {
-            var settings = DIFFICULTY_SETTINGS.ContainsKey(config.difficulty)
-                ? DIFFICULTY_SETTINGS[config.difficulty]
-                : DIFFICULTY_SETTINGS["medium"];
+            rng = new System.Random(config.id + config.bpm); // Deterministic per level
 
-            // Filter onsets by energy percentile
-            var filteredOnsets = FilterOnsets(analysis.onsets, settings.onsetPercentile);
+            var settings = SETTINGS.ContainsKey(config.difficulty)
+                ? SETTINGS[config.difficulty] : SETTINGS["medium"];
 
-            // Generate notes from onsets
+            // Step 1: Weight onsets by energy (not hard cutoff)
+            var weightedOnsets = WeightOnsets(analysis.onsets);
+
+            // Step 2: Select notes using energy threshold
             var notes = new List<NoteData>();
-            float lastNoteTimePerLane = -1f;
             float[] laneLastTime = new float[5];
             for (int i = 0; i < 5; i++) laneLastTime[i] = -1f;
+            int lastLane = 2; // Start center
 
-            foreach (var onset in filteredOnsets)
+            foreach (var onset in weightedOnsets)
             {
-                if (onset.time < 2f || onset.time > config.duration - 2f) continue;
+                if (onset.time < 1.5f || onset.time > config.duration - 1.5f) continue;
 
-                // Determine lane from frequency data
-                int lane = GetLaneForTime(onset.time, analysis.frequencyData);
+                // Skip weak onsets based on difficulty (keep more for harder)
+                if (onset.energy < GetEnergyThreshold(weightedOnsets, settings.onsetPercentile))
+                    continue;
 
-                // Enforce minimum spacing
+                // Assign lane with smoothing (avoid big jumps)
+                int lane = GetSmoothedLane(onset.time, analysis.frequencyData, lastLane);
+
                 if (onset.time - laneLastTime[lane] < MIN_NOTE_SPACING) continue;
 
-                // Quantize if needed
+                // Gentle quantization: snap only if within 30ms of grid
                 float noteTime = onset.time;
                 if (settings.quantizeToGrid)
-                {
-                    noteTime = QuantizeToGrid(noteTime, config.bpm, settings.subdivision);
-                }
+                    noteTime = GentleQuantize(noteTime, config.bpm, settings.subdivision, 0.03f);
 
-                // Check for hold notes
+                // Hold notes
                 NoteType type = NoteType.Tap;
                 float duration = 0f;
-                if (config.holdProbability > 0 && Random.value < config.holdProbability)
+                if (config.holdProbability > 0 && (float)rng.NextDouble() < config.holdProbability)
                 {
                     type = NoteType.Hold;
                     float beatDur = 60f / config.bpm;
-                    duration = beatDur * (0.5f + Random.value * 1.5f); // 0.5 to 2 beats
+                    duration = beatDur * (0.5f + (float)rng.NextDouble() * 1.5f);
                 }
 
                 notes.Add(new NoteData(noteTime, lane, type, duration));
                 laneLastTime[lane] = noteTime + (type == NoteType.Hold ? duration : 0f);
+                lastLane = lane;
             }
 
-            // Apply density scaling
+            // Step 3: Thin or fill to target density
             int maxNotes = Mathf.RoundToInt(settings.maxNoteCount * config.noteDensity);
             maxNotes = Mathf.Max(settings.minNoteCount, maxNotes);
 
             if (notes.Count > maxNotes)
             {
-                // Keep evenly distributed subset
-                var sorted = notes.OrderBy(n => n.time).ToList();
-                float step = (float)sorted.Count / maxNotes;
-                var trimmed = new List<NoteData>();
-                for (float i = 0; i < sorted.Count && trimmed.Count < maxNotes; i += step)
-                {
-                    trimmed.Add(sorted[Mathf.FloorToInt(i)]);
-                }
-                notes = trimmed;
+                // Thin by removing every Nth note (preserves rhythm feel)
+                notes = ThinNotes(notes, maxNotes);
             }
 
-            // Ensure minimum note count with beat-grid fill
             if (notes.Count < settings.minNoteCount)
             {
                 FillWithBeatGrid(notes, config, settings);
             }
 
-            // Sort by time
             notes.Sort((a, b) => a.time.CompareTo(b.time));
 
             var metadata = new ChartMetadata
@@ -98,25 +93,38 @@ namespace PulseHighway.Audio
                 duration = config.duration,
                 bpm = config.bpm,
                 noteCount = notes.Count,
-                avgNotesPerSecond = notes.Count / config.duration
+                avgNotesPerSecond = notes.Count / Mathf.Max(config.duration, 1f)
             };
 
             return new ChartData(notes.ToArray(), metadata);
         }
 
-        private List<Onset> FilterOnsets(List<Onset> onsets, float percentile)
+        private List<Onset> WeightOnsets(List<Onset> onsets)
         {
-            if (onsets.Count == 0) return new List<Onset>();
+            if (onsets.Count == 0) return onsets;
 
-            var sorted = onsets.OrderBy(o => o.energy).ToList();
-            float threshold = sorted[Mathf.FloorToInt(sorted.Count * (1f - percentile))].energy;
+            // Normalize energy to 0-1 range
+            float maxEnergy = onsets.Max(o => o.energy);
+            if (maxEnergy < 0.001f) return onsets;
 
-            return onsets.Where(o => o.energy >= threshold).ToList();
+            return onsets.Select(o => new Onset(o.time, o.energy / maxEnergy)).ToList();
         }
 
-        private int GetLaneForTime(float time, List<FrequencyFrame> freqData)
+        private float GetEnergyThreshold(List<Onset> onsets, float percentile)
         {
-            if (freqData.Count == 0) return Random.Range(0, 5);
+            if (onsets.Count == 0) return 0f;
+            var sorted = onsets.OrderBy(o => o.energy).ToList();
+            int idx = Mathf.FloorToInt(sorted.Count * (1f - percentile));
+            idx = Mathf.Clamp(idx, 0, sorted.Count - 1);
+            return sorted[idx].energy;
+        }
+
+        /// <summary>
+        /// Assign lane based on frequency content, but smooth transitions to avoid wild jumps.
+        /// </summary>
+        private int GetSmoothedLane(float time, List<FrequencyFrame> freqData, int lastLane)
+        {
+            if (freqData.Count == 0) return rng.Next(0, 5);
 
             // Find closest frequency frame
             int bestIdx = 0;
@@ -124,22 +132,44 @@ namespace PulseHighway.Audio
             for (int i = 0; i < freqData.Count; i++)
             {
                 float dist = Mathf.Abs(freqData[i].time - time);
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestIdx = i;
-                }
+                if (dist < bestDist) { bestDist = dist; bestIdx = i; }
             }
 
-            return freqData[bestIdx].DominantLane();
+            int freqLane = freqData[bestIdx].DominantLane();
+
+            // Smooth: don't jump more than 2 lanes at a time
+            int diff = freqLane - lastLane;
+            if (Mathf.Abs(diff) > 2)
+                freqLane = lastLane + Mathf.Clamp(diff, -2, 2);
+
+            return Mathf.Clamp(freqLane, 0, 4);
         }
 
-        private float QuantizeToGrid(float time, int bpm, int subdivision)
+        /// <summary>
+        /// Snap to grid only if within tolerance (preserves organic timing).
+        /// </summary>
+        private float GentleQuantize(float time, int bpm, int subdivision, float tolerance)
         {
             float beatDur = 60f / bpm;
             float gridSize = subdivision > 0 ? beatDur / subdivision : beatDur;
+            float nearest = Mathf.Round(time / gridSize) * gridSize;
 
-            return Mathf.Round(time / gridSize) * gridSize;
+            if (Mathf.Abs(time - nearest) <= tolerance)
+                return nearest;
+            return time; // Keep original if too far from grid
+        }
+
+        private List<NoteData> ThinNotes(List<NoteData> notes, int targetCount)
+        {
+            if (notes.Count <= targetCount) return notes;
+
+            // Keep every Nth note to reach target
+            var sorted = notes.OrderBy(n => n.time).ToList();
+            float step = (float)sorted.Count / targetCount;
+            var result = new List<NoteData>();
+            for (float i = 0; i < sorted.Count && result.Count < targetCount; i += step)
+                result.Add(sorted[Mathf.FloorToInt(i)]);
+            return result;
         }
 
         private void FillWithBeatGrid(List<NoteData> notes, LevelConfig config, DifficultySettings settings)
@@ -147,27 +177,29 @@ namespace PulseHighway.Audio
             float beatDur = 60f / config.bpm;
             float gridSize = settings.subdivision > 0 ? beatDur / settings.subdivision : beatDur;
 
-            HashSet<float> existingTimes = new HashSet<float>();
-            foreach (var n in notes) existingTimes.Add(Mathf.Round(n.time * 100f) / 100f);
+            var existingTimes = new HashSet<int>();
+            foreach (var n in notes) existingTimes.Add(Mathf.RoundToInt(n.time * 100));
 
             float time = 2f;
+            int lane = 2;
             while (time < config.duration - 2f && notes.Count < settings.minNoteCount)
             {
-                float roundedTime = Mathf.Round(time * 100f) / 100f;
-                if (!existingTimes.Contains(roundedTime))
+                int key = Mathf.RoundToInt(time * 100);
+                if (!existingTimes.Contains(key))
                 {
-                    int lane = Random.Range(0, 5);
+                    // Smooth lane movement
+                    lane = Mathf.Clamp(lane + rng.Next(-1, 2), 0, 4);
+
                     NoteType type = NoteType.Tap;
                     float dur = 0f;
-
-                    if (config.holdProbability > 0 && Random.value < config.holdProbability * 0.5f)
+                    if (config.holdProbability > 0 && (float)rng.NextDouble() < config.holdProbability * 0.5f)
                     {
                         type = NoteType.Hold;
-                        dur = beatDur * (0.5f + Random.value);
+                        dur = beatDur * (0.5f + (float)rng.NextDouble());
                     }
 
                     notes.Add(new NoteData(time, lane, type, dur));
-                    existingTimes.Add(roundedTime);
+                    existingTimes.Add(key);
                 }
                 time += gridSize;
             }
@@ -183,15 +215,10 @@ namespace PulseHighway.Audio
         public int minNoteCount;
         public int maxNoteCount;
 
-        public DifficultySettings(float onsetPercentile, bool quantizeToGrid, int subdivision,
-            float targetNotesPerSecond, int minNoteCount, int maxNoteCount)
+        public DifficultySettings(float p, bool q, int s, float t, int min, int max)
         {
-            this.onsetPercentile = onsetPercentile;
-            this.quantizeToGrid = quantizeToGrid;
-            this.subdivision = subdivision;
-            this.targetNotesPerSecond = targetNotesPerSecond;
-            this.minNoteCount = minNoteCount;
-            this.maxNoteCount = maxNoteCount;
+            onsetPercentile = p; quantizeToGrid = q; subdivision = s;
+            targetNotesPerSecond = t; minNoteCount = min; maxNoteCount = max;
         }
     }
 }
