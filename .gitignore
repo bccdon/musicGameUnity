@@ -1,0 +1,27 @@
+# Unity
+Library/
+Temp/
+Obj/
+Builds/
+Build/
+Logs/
+UserSettings/
+MemoryCaptures/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results
+test-results/
