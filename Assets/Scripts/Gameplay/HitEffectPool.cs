@@ -34,11 +34,11 @@ namespace PulseHighway.Gameplay
         private void ConfigureParticleSystem(ParticleSystem ps)
         {
             var main = ps.main;
-            main.maxParticles = 30;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.6f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(5f, 15f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
-            main.gravityModifier = 2f;
+            main.maxParticles = 60;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(8f, 22f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.15f, 0.45f);
+            main.gravityModifier = 1.5f;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.playOnAwake = false;
             main.loop = false;
@@ -53,7 +53,7 @@ namespace PulseHighway.Gameplay
             var emission = ps.emission;
             emission.rateOverTime = 0;
             emission.SetBursts(new ParticleSystem.Burst[] {
-                new ParticleSystem.Burst(0f, 20, 30)
+                new ParticleSystem.Burst(0f, 35, 50)
             });
 
             // Color over lifetime: fade out

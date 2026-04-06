@@ -73,8 +73,8 @@ namespace PulseHighway.Core
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.position = new Vector3(0f, 9f, 14f);
-                cam.transform.LookAt(new Vector3(0f, 0f, -20f));
+                cam.transform.position = new Vector3(0f, 8f, 5f);
+                cam.transform.LookAt(new Vector3(0f, 0f, -40f));
             }
         }
 

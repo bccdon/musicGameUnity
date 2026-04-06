@@ -22,18 +22,18 @@ namespace PulseHighway.Visual
 
             // Bloom
             var bloom = profile.Add<Bloom>(true);
-            bloom.intensity.value = 2.0f;
+            bloom.intensity.value = 3.5f;
             bloom.intensity.overrideState = true;
-            bloom.threshold.value = 0.9f;
+            bloom.threshold.value = 0.7f;
             bloom.threshold.overrideState = true;
-            bloom.scatter.value = 0.5f;
+            bloom.scatter.value = 0.6f;
             bloom.scatter.overrideState = true;
             bloom.tint.value = new Color(0.9f, 0.8f, 1f);
             bloom.tint.overrideState = true;
 
             // Vignette
             var vignette = profile.Add<Vignette>(true);
-            vignette.intensity.value = 0.35f;
+            vignette.intensity.value = 0.45f;
             vignette.intensity.overrideState = true;
             vignette.smoothness.value = 0.4f;
             vignette.smoothness.overrideState = true;

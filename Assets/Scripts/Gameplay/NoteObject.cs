@@ -17,7 +17,7 @@ namespace PulseHighway.Gameplay
         protected Transform headTransform;
         protected Transform coreTransform;
 
-        private static Mesh octahedronMesh;
+        private static Mesh gemMesh;
         private static Mesh coreMesh;
         private static Material coreMaterial;
 
@@ -28,10 +28,10 @@ namespace PulseHighway.Gameplay
             // Only create geometry once
             if (!IsSetUp)
             {
-                if (octahedronMesh == null)
-                    octahedronMesh = MeshFactory.CreateOctahedron(0.6f);
+                if (gemMesh == null)
+                    gemMesh = MeshFactory.CreateGemBlock(1.8f, 0.8f, 0.8f);
                 if (coreMesh == null)
-                    coreMesh = MeshFactory.CreateOctahedron(0.25f);
+                    coreMesh = MeshFactory.CreateOctahedron(0.3f);
                 if (coreMaterial == null)
                     coreMaterial = MaterialFactory.CreateNoteCoreMaterial();
 
@@ -39,7 +39,7 @@ namespace PulseHighway.Gameplay
                 var headGO = new GameObject("Head");
                 headGO.transform.SetParent(transform, false);
                 var headMF = headGO.AddComponent<MeshFilter>();
-                headMF.mesh = octahedronMesh;
+                headMF.mesh = gemMesh;
                 headRenderer = headGO.AddComponent<MeshRenderer>();
                 headRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 headTransform = headGO.transform;

@@ -46,7 +46,7 @@ namespace PulseHighway.Visual
             Color c = GetLaneColor(lane);
             mat.color = new Color(c.r, c.g, c.b, 0.7f);
             mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", c * 1.5f);
+            mat.SetColor("_EmissionColor", c * 3f);
             SetupTransparency(mat);
             cachedEdgeMaterials[lane] = mat;
             return mat;
@@ -58,7 +58,7 @@ namespace PulseHighway.Visual
             mat.name = "HitLine";
             mat.color = Color.white;
             mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", new Color(0f, 0.8f, 1f) * 4f);
+            mat.SetColor("_EmissionColor", new Color(0f, 0.8f, 1f) * 8f);
             return mat;
         }
 
@@ -70,9 +70,9 @@ namespace PulseHighway.Visual
             Color c = GetLaneColor(lane);
             mat.color = c;
             mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", c * 3f);
-            mat.SetFloat("_Smoothness", 0.9f);
-            mat.SetFloat("_Metallic", 0.8f);
+            mat.SetColor("_EmissionColor", c * 6f);
+            mat.SetFloat("_Smoothness", 0.95f);
+            mat.SetFloat("_Metallic", 0.85f);
             cachedNoteMaterials[lane] = mat;
             return mat;
         }
